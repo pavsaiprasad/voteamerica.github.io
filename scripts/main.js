@@ -40,6 +40,20 @@ $(function(){
         $.getScript('scripts/time-polyfill.min.js');
     }
 
+    if (!Modernizr.inputtypes.date) {
+        $('<link>').appendTo('head').attr({
+            type: 'text/css', 
+            rel: 'stylesheet',
+            href: 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css'
+        });
+        $.when(
+            $.getScript('scripts/jquery-ui.min.js'),
+            $.getScript('scripts/jquery-ui-i18n.min.js')
+        ).then(initDateTimepicker);
+    } else {
+        initDateTimepicker();
+    }
+
     // Initialise form validator
     $forms.find('form').validator({
         custom: {
@@ -130,86 +144,90 @@ $(function(){
         updateHiddenJSONTimes( $(this).find('.available-times') );
     });
 
-    $forms.find('.available-times').each(function() {
-        var $self = $(this),
-            type = $self.attr('data-type'),
-            rowID = 0;
+    function initDateTimepicker() {
+        $forms.find('.available-times').each(function() {
+            var $self = $(this),
+                type = $self.attr('data-type'),
+                rowID = 0;
 
-        function addRow(hideDeleteButton) {
-            var $row = $(rowTemplate.replace(/{{type}}/g, type).replace(/{{id}}/g, rowID++));
-            var inputDate = $row.find('.input--date'),
-                inputFormattedDate = $row.find('.input-formatted-date');
-            getCalendarBasedOnInputSupport($row);
+            function addRow(hideDeleteButton) {
+                var $row = $(rowTemplate.replace(/{{type}}/g, type).replace(/{{id}}/g, rowID++));
 
-            if (hideDeleteButton) {
-                $row.find('.remove-time').hide();
-            }
+                $row.find('.input--date').attr('min', yyyymmdd());
 
-            $self.append($row);
-
-            if (!Modernizr.inputtypes.time) {
-                var $times = $row.find('input[type="time"]').attr('step', 3600);
-                if ($times.inputTime) {
-                    $times.inputTime();
+                if (!Modernizr.inputtypes.date){
+                    initBackupCalendar($row);
                 }
+
+                if (!hideDeleteButton) {
+                    var $prevRow = $self.find('.available-times__row').last();
+                    datetimeClasses.forEach(function(c){
+                        var prevVal = $prevRow.find(c).val();
+                        $row.find(c).val(prevVal).trigger('update');
+                    });
+                } else {
+                    $row.find('.remove-time').hide();
+                }
+
+                $self.append($row);
+
+                if (!Modernizr.inputtypes.time) {
+                    var $times = $row.find('input[type="time"]').attr('step', 3600);
+                    if ($times.inputTime) {
+                        $times.inputTime();
+                    }
+                }
+
+                $self.parents('form').validator('update');
             }
 
-            $self.parents('form').validator('update');
-        }
+            function initBackupCalendar($row){
+                var $inputDate = $row.find('.input--date'),
+                    $inputFormattedDate = $row.find('.input-formatted-date'),
+                    userLanguage = navigator.language || navigator.userLanguage; 
 
-        function getCalendarBasedOnInputSupport($row){
-            var inputDate = $row.find('.input--date'),
-            inputFormattedDate = $row.find('.input-formatted-date');
+                $.datepicker.setDefaults($.datepicker.regional[userLanguage]);
+                $inputFormattedDate.attr('name', type+'Date');
+                $inputDate.removeAttr('name')
+                    .datepicker({
+                        altField: "#alt-"+$row.find('.input--date').attr('id'),
+                        altFormat: "yy-mm-dd",
+                        yearRange: '2016:2016',
+                        minDate: 0,
+                        maxDate: new Date(2016,11 -1,08)
+                    })
+                    .on('keypress', function(e){ e.preventDefault(); })
+                    .on('paste', function(e){ e.preventDefault(); });
+    	    }
 
-            if (!checkInputSupport('date')){
-               var userLanguage = navigator.language || navigator.userLanguage; 
-               $.datepicker.setDefaults($.datepicker.regional[userLanguage]);
-               inputDate.removeAttr('name');
-               inputFormattedDate.attr('name', type+'Date');
-               inputDate.datepicker({
-	            altField: "#alt-"+$row.find('.input--date').attr('id'), 
-	            altFormat: "yy-mm-dd", 
-	            yearRange: '2016:2016',
-	            minDate: 0, 
-	            maxDate: new Date(2016,11 -1,08)})
-            .on('keypress', function(e){ e.preventDefault(); })
-		    .on('paste', function(e){ e.preventDefault(); });
-		   }
-           else {
-            inputDate.attr('name', type+'Date');
-            inputFormattedDate.removeAttr('name');
-            inputDate.attr('min', yyyymmdd());
-            inputDate.attr('max', yyyymmdd(new Date(2016,11 -1,08)));
+            function removeRow($row){
+                $row.remove();
+                $self.parents('form').validator('update');
             }
-	    }
 
-        function removeRow($row){
-            $row.remove();
-            $self.parents('form').validator('update');
-        }
+            function toggleRemoveTimeBtn() {
+                var rowCount = $self.find('.available-times__row').length;
+                $self.find('.remove-time').toggle(rowCount > 1);
+            }
 
-        function toggleRemoveTimeBtn() {
-            var rowCount = $self.find('.available-times__row').length;
-            $self.find('.remove-time').toggle(rowCount > 1);
-        }
+            addRow(true);
 
-        addRow(true);
+            $self.siblings('.add-time-btn').on('click', function(e) {
+                addRow();
+                toggleRemoveTimeBtn();
+                e.preventDefault();
+            });
 
-        $self.siblings('.add-time-btn').on('click', function(e) {
-            addRow();
-            toggleRemoveTimeBtn();
-            e.preventDefault();
+            $self.on('click', '.remove-time', function(e) {
+                removeRow( $(this).parent() );
+                toggleRemoveTimeBtn();
+                e.preventDefault();
+            });
         });
-
-        $self.on('click', '.remove-time', function(e) {
-            removeRow( $(this).parent() );
-            toggleRemoveTimeBtn();
-            e.preventDefault();
-        });
-    });
+    }
 
     function getDateTimeValues($timesList) {
-        var formattedDatetimeClasses = (!checkInputSupport('date')) ? [
+        var formattedDatetimeClasses = (!Modernizr.inputtypes.date) ? [
         '.input-formatted-date',
         '.input--time-start',
         '.input--time-end'
