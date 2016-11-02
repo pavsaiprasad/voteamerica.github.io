@@ -153,6 +153,7 @@ $(function(){
             function addRow(hideDeleteButton) {
                 var $row = $(rowTemplate.replace(/{{type}}/g, type).replace(/{{id}}/g, rowID++));
 
+                // Set a minimum value for the date input to today's date
                 $row.find('.input--date').attr('min', yyyymmdd());
 
                 if (!Modernizr.inputtypes.date){
@@ -160,12 +161,15 @@ $(function(){
                 }
 
                 if (!hideDeleteButton) {
+                    // Make the new row's value equal to the previous row 
+                    // if one already exists, to save users time
                     var $prevRow = $self.find('.available-times__row').last();
                     datetimeClasses.forEach(function(c){
                         var prevVal = $prevRow.find(c).val();
                         $row.find(c).val(prevVal).trigger('update');
                     });
                 } else {
+                    // Remove the 'X' icon if there's only one row
                     $row.find('.remove-time').hide();
                 }
 
